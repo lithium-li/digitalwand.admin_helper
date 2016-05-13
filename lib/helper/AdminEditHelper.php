@@ -555,7 +555,19 @@ abstract class AdminEditHelper extends AdminBaseHelper
 	{
 		if (isset($_REQUEST[$this->pk()])) {
 			$className = static::getModel();
-			$result = $className::getById($_REQUEST[$this->pk()]);
+			if ($this->multiLanguage) {
+				$result = $className::getList(array(
+						'filter' => array(
+							$this->pk() => $_REQUEST[$this->pk()],
+							'LANG' => $this->getCurrentLanguageCode()
+						)
+					)
+				);
+			} else {
+				$result = $className::getList(array(
+					$this->pk() => $_REQUEST[$this->pk()]
+				));
+			}
 
 			return $result->fetch();
 		}
@@ -582,6 +594,7 @@ abstract class AdminEditHelper extends AdminBaseHelper
 	protected function saveElement($id = null)
 	{
 		$className = static::getModel();
+		$this->data['LANG'] = $this->getCurrentLanguageCode();
 		$entityManager = new EntityManager($className, $this->data, $id, $this);
 
 		$saveResult = $entityManager->save();
