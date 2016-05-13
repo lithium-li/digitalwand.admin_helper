@@ -244,10 +244,10 @@ abstract class AdminBaseHelper
 	protected $context = '';
 
 	/**
-	 * Флаг использования разделов, необходимо переопределять в дочернем классе
+	 * Флаг использования мультиязычности, необходимо переопределять в дочернем классе
 	 * @var bool
 	 */
-	static protected $useSections = false;
+	protected $multiLanguage = false;
 
 	/**
 	 * Правило именования хелперов для разделов по умолчанию
@@ -273,7 +273,7 @@ abstract class AdminBaseHelper
 		if (static::setInterfaceSettings($settings)) {
 			$this->fields = $fields;
 		}
-		else {
+		else { 
 			$settings = static::getInterfaceSettings();
 			$this->fields = $settings['FIELDS'];
 		}

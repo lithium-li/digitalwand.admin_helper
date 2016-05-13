@@ -2,6 +2,7 @@
 
 namespace DigitalWand\AdminHelper\Helper;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use DigitalWand\AdminHelper\EntityManager;
 use DigitalWand\AdminHelper\Widget\HelperWidget;
@@ -19,7 +20,7 @@ Loc::loadMessages(__FILE__);
  * Этого будет дастаточно для получения минимальной функциональности.
  *
  * @package AdminHelper
- * 
+ *
  * @see AdminBaseHelper::$model
  * @see AdminBaseHelper::$module
  * @see AdminBaseHelper::$listViewName
@@ -188,18 +189,18 @@ abstract class AdminEditHelper extends AdminBaseHelper
 	 * AdminEditHelper::customActions()
 	 *
 	 * @param bool $showDeleteButton Управляет видимостью кнопки удаления элемента.
-     * 
+     *
      * @return array
-     * 
+     *
 	 * @see AdminEditHelper::$menu
 	 * @see AdminEditHelper::customActions()
-	 * 
+	 *
      * @api
 	 */
 	protected function getMenu($showDeleteButton = true)
 	{
 		$listHelper = static::getHelperClass(AdminListHelper::className());
-        
+
 		$menu = array(
 			$this->getButton('RETURN_TO_LIST', array(
 				'LINK' => $listHelper::getUrl(array_merge($this->additionalUrlParams,
@@ -237,15 +238,80 @@ abstract class AdminEditHelper extends AdminBaseHelper
 			));
 		}
 
-		if (count($arSubMenu)) {
-			$menu[] = array('SEPARATOR' => 'Y');
-			$menu[] = $this->getButton('ACTIONS', array(
-				'MENU' => $arSubMenu,
-				'ICON' => 'btn_new'
-			));
+        if (count($arSubMenu) || $this->multiLanguage) {
+            $menu[] = array('SEPARATOR' => 'Y');
+        }
+
+		if($this->multiLanguage) {
+            $langMenu = $this->getLangMenu();
+            $currentLanguageText = '';
+            foreach($langMenu as $i => $lang) {
+                if($lang['CURRENT']) {
+                    $currentLanguageText = $lang['TEXT'];
+                    unset($langMenu[$i]);
+                    break;
+                }
+            }
+
+			$menu[] = array(
+                'TEXT' => $currentLanguageText,
+				'MENU' => $langMenu
+			);
 		}
 
+        if (count($arSubMenu)) {
+            $menu[] = $this->getButton('ACTIONS', array(
+                'MENU' => $arSubMenu,
+                'ICON' => 'btn_new'
+            ));
+        }
+
 		return $menu;
+	}
+
+    /**
+     * Возвращает 2-х символьный идентификатор текущего языка
+     *
+     * @return null|string
+     */
+    protected function getCurrentLanguageCode()
+    {
+        $currentLanguage = Application::getInstance()->getContext()->getRequest()->get('ah_lang');
+
+        return $currentLanguage ? $currentLanguage : 'ru';
+    }
+
+    /**
+	 * Получение списка языков интерфейса
+     * @return array[]
+     */
+	protected function getLangMenu()
+	{
+		$cLanguage = new \CLanguage();
+		$langSwitcherArray = $cLanguage->GetLangSwitcherArray();
+		$languages = array();
+		$url = parse_url(Application::getInstance()->getContext()->getRequest()->getRequestUri());
+        $currentLanguageCode = $this->getCurrentLanguageCode();
+
+		if (empty($url['query'])) {
+			$url = $url['path'];
+		} else {
+			parse_str($url['query'], $query);
+			unset($query['ah_lang']);
+			$url = $url['path'] . '?' . http_build_query($query);
+		}
+
+		foreach ($langSwitcherArray as $language) {
+			if ($language['ACTIVE'] === 'Y') {
+				$languages[] = array(
+					'TEXT' => $language['NAME'],
+					'LINK' => $url . '&ah_lang=' . $language['LID'],
+                    'CURRENT' => $currentLanguageCode === $language['LID']
+				);
+			}
+		}
+
+		return $languages;
 	}
 
     /**
@@ -273,7 +339,7 @@ abstract class AdminEditHelper extends AdminBaseHelper
 		$this->tabControl->EndEpilogContent();
 
 		$query = $this->additionalUrlParams;
-        
+
 		if (isset($_REQUEST[$this->pk()])) {
 			$query[$this->pk()] = $_REQUEST[$this->pk()];
 		}
@@ -302,7 +368,7 @@ abstract class AdminEditHelper extends AdminBaseHelper
 	protected function showEditPageButtons()
 	{
 		$listHelper = static::getHelperClass(AdminListHelper::className());
-	
+
         $this->tabControl->Buttons(array(
 			'back_url' => $listHelper::getUrl(array_merge($this->additionalUrlParams,
 				array(
@@ -314,7 +380,7 @@ abstract class AdminEditHelper extends AdminBaseHelper
 
 	/**
 	 * Отрисовка верхней части страницы.
-     * 
+     *
 	 * @api
 	 */
 	protected function showProlog()
@@ -323,13 +389,13 @@ abstract class AdminEditHelper extends AdminBaseHelper
 
 	/**
 	 * Отрисовка нижней части страницы. По-умолчанию рисует все поля, которые не попали в вывод, как input hidden.
-     * 
+     *
 	 * @api
 	 */
 	protected function showEpilog()
 	{
 		echo bitrix_sessid_post();
-	
+
         $interfaceSettings = static::getInterfaceSettings();
 
 		foreach ($interfaceSettings['FIELDS'] as $code => $settings) {
@@ -343,7 +409,7 @@ abstract class AdminEditHelper extends AdminBaseHelper
 	 * Отрисовывает вкладку со всеми привязанными к ней полями.
 	 *
 	 * @param $tabSettings
-     * 
+     *
 	 * @internal
 	 */
 	private function showTabElements($tabSettings)
@@ -388,10 +454,10 @@ abstract class AdminEditHelper extends AdminBaseHelper
 	 * </ul>
 	 *
 	 * @return bool
-	 * 
+	 *
      * @see HelperWidget::processEditAction();
 	 * @see HelperWidget::processAfterSaveAction();
-	 * 
+	 *
      * @internal
 	 */
 	protected function editAction()
@@ -418,7 +484,7 @@ abstract class AdminEditHelper extends AdminBaseHelper
 			$this->validationErrors = array_merge($this->validationErrors, $widget->getValidationErrors());
 			$allWidgets[] = $widget;
 
-			if ($widget->getSettings('READONLY') || empty($this->data[$this->pk()]) 
+			if ($widget->getSettings('READONLY') || empty($this->data[$this->pk()])
 				&& $widget->getSettings('HIDE_WHEN_CREATE')) {
 				unset($this->data[$code]);
 			}
@@ -498,19 +564,19 @@ abstract class AdminEditHelper extends AdminBaseHelper
 	}
 
 	/**
-	 * Сохранение элемента. Можно переопределить, если требуется сложная логика и нет возможности определить её 
+	 * Сохранение элемента. Можно переопределить, если требуется сложная логика и нет возможности определить её
      * в модели.
-     * 
+     *
      * Операциями сохранения модели занимается EntityManager.
 	 *
 	 * @param bool $id
-	 * 
+	 *
      * @return \Bitrix\Main\Entity\AddResult|\Bitrix\Main\Entity\UpdateResult
-	 * 
+	 *
      * @throws \Exception
-     * 
+     *
      * @see EntityManager
-	 * 
+	 *
      * @api
 	 */
 	protected function saveElement($id = null)
@@ -528,11 +594,11 @@ abstract class AdminEditHelper extends AdminBaseHelper
 	 * Удаление элемента. Можно переопределить, если требуется сложная логика и нет возможности определить её в модели.
 	 *
 	 * @param $id
-	 * 
+	 *
      * @return bool|\Bitrix\Main\Entity\DeleteResult
-	 * 
+	 *
      * @throws \Exception
-	 * 
+	 *
      * @api
 	 */
 	protected function deleteElement($id)
@@ -557,26 +623,26 @@ abstract class AdminEditHelper extends AdminBaseHelper
 	 *
 	 * @param string $action Название операции.
 	 * @param int|null $id ID элемента.
-     * 
+     *
 	 * @see AdminEditHelper::fillMenu()
-	 * 
+	 *
      * @api
 	 */
 	protected function customActions($action, $id)
 	{
 		if ($action == 'delete' AND !is_null($id)) {
 			$result = $this->deleteElement($id);
-            
+
 			if(!$result->isSuccess()){
 				$this->addErrors($result->getErrorMessages());
 			}
-			
+
             $listHelper = static::getHelperClass(AdminListHelper::className());
             $redirectUrl = $listHelper::getUrl(array_merge(
                 $this->additionalUrlParams,
                 array('restore_query' => 'Y')
             ));
-			
+
             LocalRedirect($redirectUrl);
 		}
 	}
@@ -586,7 +652,7 @@ abstract class AdminEditHelper extends AdminBaseHelper
 	 *
 	 * @see $data
 	 * @see AdminBaseHelper::setTitle()
-	 * 
+	 *
      * @api
 	 */
 	protected function setElementTitle()
